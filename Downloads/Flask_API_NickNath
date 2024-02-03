@@ -1,0 +1,235 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "ba4cce55-4ad9-46b1-8b64-37ce81897fec",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "from sqlalchemy.ext.automap import automap_base\n",
+    "from sqlalchemy.orm import Session\n",
+    "from sqlalchemy import create_engine\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import sqlalchemy\n",
+    "from sqlalchemy import create_engine, func\n",
+    "\n",
+    "from flask import Flask, jsonify\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "6485bb98-7732-4091-ba98-7bb619c42762",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Database Setup: importing dataframes and CSV files\n",
+    "#################################################\n",
+    "engine = create_engine(\"sqlite:///hawaii.sqlite\")\n",
+    "df = pd.read_csv('hawaii_measurements.csv')\n",
+    "stations_df = pd.read_csv('hawaii_stations.csv')\n",
+    "total_stations = stations_df['station'].nunique()\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "1a574c94-7a14-4d19-bdf9-5bb7b4f27d09",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "C:\\Users\\nickn\\AppData\\Local\\Temp\\ipykernel_19428\\2597355465.py:4: SADeprecationWarning: The AutomapBase.prepare.reflect parameter is deprecated and will be removed in a future release.  Reflection is enabled when AutomapBase.prepare.autoload_with is passed.\n",
+      "  Base.prepare(engine, reflect=True)\n"
+     ]
+    }
+   ],
+   "source": [
+    "# reflect an existing database into a new model\n",
+    "Base = automap_base()\n",
+    "# reflect the tables\n",
+    "Base.prepare(engine, reflect=True)\n",
+    "\n",
+    "# Save references to each table\n",
+    "Measurement = Base.classes.measurement\n",
+    "Station = Base.classes.station\n",
+    "\n",
+    "# Create our session (link) from Python to the DB\n",
+    "\n",
+    "session = Session(engine)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "8e67fec5-bd30-4fb5-85f8-738e2001565e",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#################################################\n",
+    "# Flask Setup\n",
+    "#################################################\n",
+    "\n",
+    "app = Flask(__name__)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "007b5464-555c-400b-8889-68be93e3674c",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * Serving Flask app '__main__'\n",
+      " * Debug mode: on\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\n",
+      " * Running on http://127.0.0.1:5000\n",
+      "Press CTRL+C to quit\n",
+      " * Restarting with watchdog (windowsapi)\n"
+     ]
+    },
+    {
+     "ename": "SystemExit",
+     "evalue": "1",
+     "output_type": "error",
+     "traceback": [
+      "An exception has occurred, use %tb to see the full traceback.\n",
+      "\u001b[1;31mSystemExit\u001b[0m\u001b[1;31m:\u001b[0m 1\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "C:\\Users\\nickn\\anaconda3\\Lib\\site-packages\\IPython\\core\\interactiveshell.py:3534: UserWarning: To exit: use 'exit', 'quit', or Ctrl-D.\n",
+      "  warn(\"To exit: use 'exit', 'quit', or Ctrl-D.\", stacklevel=1)\n"
+     ]
+    }
+   ],
+   "source": [
+    "#################################################\n",
+    "# Flask Routes\n",
+    "#################################################\n",
+    "@app.route('/')\n",
+    "def home():\n",
+    "    \"\"\"List all available api routes.\"\"\"\n",
+    "    return (\n",
+    "        f\"Available Routes:<br/>\"\n",
+    "        f\"/api/v1.0/precipitation<br/>\"\n",
+    "        f\"/api/v1.0/stations<br/>\"\n",
+    "        f\"/api/v1.0/tobs<br/>\"\n",
+    "        f\"/api/v1.0/<start><br/>\"\n",
+    "        f\"/api/v1.0/<start>/<end>\"\n",
+    "    )\n",
+    "\n",
+    "@app.route('/api/v1.0/precipitation')\n",
+    "def precipitation():\n",
+    "    # Convert the query results to a dictionary using date as the key and prcp as the value\n",
+    "    prcp_dict = pd.Series(df.prcp.values, index=df.date).to_dict()\n",
+    "    return jsonify(prcp_dict)\n",
+    "\n",
+    "@app.route('/api/v1.0/stations')\n",
+    "def stations():\n",
+    "    # Return a JSON list of stations from the dataset\n",
+    "    stations_list = stations_df['station'].tolist()\n",
+    "    return jsonify(stations_list)\n",
+    "\n",
+    "@app.route('/api/v1.0/tobs')\n",
+    "def tobs():\n",
+    "    # Query the dates and temperature observations of the most-active station for the last year of data\n",
+    "    # Assuming 'most_active_station' is the ID of the most active station\n",
+    "    # and 'last_year_data' is a dataframe with the last year of data for this station\n",
+    "    tobs_data = last_year_data[['date', 'tobs']].set_index('date').to_dict()\n",
+    "    return jsonify(tobs_data)\n",
+    "\n",
+    "@app.route('/api/v1.0/<start>')\n",
+    "def start(start):\n",
+    "    # Return a JSON list of the minimum temperature, the average temperature, and the max temperature for a given start\n",
+    "    # Assuming 'calculate_temps' is a function that calculates the TMIN, TAVG, and TMAX\n",
+    "    temps = calculate_temps(start_date=start)\n",
+    "    return jsonify(temps)\n",
+    "\n",
+    "@app.route('/api/v1.0/<start>/<end>')\n",
+    "def start_end(start, end):\n",
+    "    # Return a JSON list of the minimum temperature, the average temperature, and the max temperature for a given start-end range\n",
+    "    # Assuming 'calculate_temps' is a function that calculates the TMIN, TAVG, and TMAX\n",
+    "    temps = calculate_temps(start_date=start, end_date=end)\n",
+    "    return jsonify(temps)\n",
+    "\n",
+    "def calculate_temps(start_date, end_date=None):\n",
+    "    # Filter the data based on the provided dates\n",
+    "    if end_date:\n",
+    "        \n",
+    "        temps = df[(df['date'] >= start_date) & (df['date'] <= end_date)]\n",
+    "    else:\n",
+    "        # If no end date is provided, filter from the start date onwards\n",
+    "        temps = df[df['date'] >= start_date]\n",
+    "    \n",
+    "    # Calculate the minimum, average, and maximum temperatures\n",
+    "    tmin = temps['tobs'].min()\n",
+    "    tavg = temps['tobs'].mean()\n",
+    "    tmax = temps['tobs'].max()\n",
+    "    \n",
+    "    # Return the calculated temperatures\n",
+    "    return {'TMIN': tmin, 'TAVG': tavg, 'TMAX': tmax}\n",
+    "\n",
+    "   \n",
+    "\n",
+    "if __name__ == '__main__':\n",
+    "    app.run(debug=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "5b00b758-fb99-4e32-9bbb-ea2d03621a4b",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.5"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
